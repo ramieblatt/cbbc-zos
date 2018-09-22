@@ -1,0 +1,29 @@
+{
+  "contracts": {
+    "Cbbc": {
+      "address": "0x178f4556eeed6abaecab90bafc8635f65d9a1854",
+      "constructorCode": "60806040526000600d60006101000a81548160ff02191690831515021790555034801561002b57600080fd5b506148ba8061003b6000396000f300",
+      "bodyBytecodeHash": "bae3ebb1215592fcd4c3abad56af72654de69a78bba61af66b18756e5b7da9a9",
+      "bytecodeHash": "3a95986fbdc9fcf3eb7e7fe1f4b26c3f83db82eb8cff7c7808645aa955d8844f"
+    }
+  },
+  "proxies": {
+    "Cbbc": [
+      {
+        "address": "0x4d123d450da44ec45761a605c6c73078266a4668",
+        "version": "0.1.0",
+        "implementation": "0x178f4556eeed6abaecab90bafc8635f65d9a1854"
+      }
+    ]
+  },
+  "app": {
+    "address": "0xd613e3e7c3f868da06752fe511186fae1db0a806"
+  },
+  "version": "0.1.0",
+  "package": {
+    "address": "0x5a141a5bfd04e70f3ee8f3effe5c06600730f9c7"
+  },
+  "provider": {
+    "address": "0x3b2ab20f51dbcede1efcdcf14b24db292a8ef288"
+  }
+}

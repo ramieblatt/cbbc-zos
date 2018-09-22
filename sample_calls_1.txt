@@ -1,0 +1,3 @@
+cbbcContract = Cbbc.at('0x4d123d450da44ec45761a605c6c73078266a4668')
+cbbcContract.owner()
+cbbcContract.mintFivePack('grantfr99','mendejo99','whiteso99','paigesa01','taylobe99',0,'0xa2A58a9447451b846447BB8D36d4d2E95fabDeDc')

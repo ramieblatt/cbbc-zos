@@ -1,0 +1,17 @@
+{
+  "name": "cbbc-zos",
+  "version": "1.0.0",
+  "description": "Crypto Baseball Cards",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "openzeppelin-zos": "^1.9.1",
+    "zos-lib": "^1.4.0"
+  },
+  "devDependencies": {},
+  "keywords": []
+}

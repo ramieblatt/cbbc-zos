@@ -1,0 +1,7 @@
+{
+  "name": "cbbc-zos",
+  "version": "0.1.0",
+  "contracts": {
+    "Cbbc": "Cbbc"
+  }
+}
