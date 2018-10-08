@@ -1,29 +1,29 @@
 {
   "contracts": {
     "Cbbc": {
-      "address": "0x056bb24e668df52f0f0e53fa95c3b6fe74e530e1",
-      "constructorCode": "60806040526000600d60006101000a81548160ff02191690831515021790555034801561002b57600080fd5b5061546f8061003b6000396000f300",
-      "bodyBytecodeHash": "12d83b4c2d600f54a3921e76a432acb6f690bf33f9e6534b5ddbd1b895c9db0e",
-      "bytecodeHash": "0d3fc5cb31aafe968d18acb35f84331efce51d6ad3f0af1ae5a6b2926cbe141a"
+      "address": "0x28e3fb17818b01cf5455653fad9d93e15ef34787",
+      "constructorCode": "60806040526000600d60006101000a81548160ff02191690831515021790555034801561002b57600080fd5b506156dd806200003c6000396000f300",
+      "bodyBytecodeHash": "187ec389603fc4e268de107dbf02880bca944e7c766df1483f15f186b4f841ae",
+      "bytecodeHash": "f4be71ec71cfbede50f6b15e1bb20e0ab9328b0becb718f231b1bea9b4142c40"
     }
   },
   "proxies": {
     "Cbbc": [
       {
-        "address": "0xb957e0555ad705c822cf281a2e66fb3fc36dc92b",
+        "address": "0xbf86a33e33082bfa3c63f66a75a23b748c35a2f1",
         "version": "0.1.0",
-        "implementation": "0x056bb24e668df52f0f0e53fa95c3b6fe74e530e1"
+        "implementation": "0x28e3fb17818b01cf5455653fad9d93e15ef34787"
       }
     ]
   },
   "app": {
-    "address": "0x282c3b197080a547e05d08215617d0ca534ed3b6"
+    "address": "0x2b7b9a2e887cc79893f8cbcaf30cd80fe2c296ea"
   },
   "version": "0.1.0",
   "package": {
-    "address": "0xb1d294f883bdd58f14acb9d846def9978d6cc89a"
+    "address": "0x3831a3bf4c8be3f6976f03dd037d7a6a9708803d"
   },
   "provider": {
-    "address": "0x2e8c1a9a3af63ca4ae00d222f96b55a349de8d06"
+    "address": "0xef97ae3db352a5fc4baf928a700d0edd68e755d0"
   }
 }

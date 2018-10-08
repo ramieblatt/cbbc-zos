@@ -7,8 +7,8 @@ import "openzeppelin-zos/contracts/lifecycle/Pausable.sol";
  */
 contract Cbbc is MintableERC721Token, Pausable {
 
-  /// @dev Emit this event whenever we set a new API Base URL (see setApiBaseUrl below)
-  event ApiBaseUrlSet(string _api_base_url);
+  /// @dev Emit this event whenever we set a new API Base URL (see setApiBaseUri below)
+  event ApiBaseUriSet(string _api_base_url);
   /// @dev Emit this event whenever we mint a new edition (see mintEdition below)
   event EditionMinted(uint16 _newEditionId, string _name, uint32 _numCards, uint256 _packPrice);
   /// @dev Emit this event whenever someone buys  a new 5 pack of cards (see buyFivePack below)
@@ -17,6 +17,8 @@ contract Cbbc is MintableERC721Token, Pausable {
   event FivePackMinted(uint16 _editionId, address indexed _owner);
   /// @dev Emit this event whenever we mint a new card (see _mintCard below)
   event CardMinted(uint16 _editionId, uint256 _cardId, address indexed _owner);
+  /// @dev Emit this event whenever the contract fallback function is called
+  event FallBackPaid(address indexed _sender, uint256 _value);
 
   /// @dev The struct representing the Crypto Baseball edition.
   struct Edition {
@@ -41,10 +43,10 @@ contract Cbbc is MintableERC721Token, Pausable {
   /*** STORAGE ***/
 
   // @dev The default API Base URI
-  string constant API_BASE_URI = "http//www.crypto-baseball-cards.com/cards/";
+  string public constant API_BASE_URI = "http//www.crypto-baseball-cards.com/cards/";
 
   // @dev The API Base URI
-  string public apiBaseUrl;
+  string public apiBaseUri;
 
   /// @dev All the editions that have been minted, indexed by editionId.
   Edition[] public editions;
@@ -60,21 +62,21 @@ contract Cbbc is MintableERC721Token, Pausable {
   /// @param _name is the CBBC ERC721 token name.
   /// @param _symbol is the CBBC ERC721 token symbol.
   function initialize(address _sender, string _name, string _symbol) isInitializer("Cbbc", "0.1.0")  public {
-    apiBaseUrl = API_BASE_URI;
+    apiBaseUri = API_BASE_URI;
     Ownable.initialize(_sender);
     ERC721Token.initialize(_name, _symbol);
   }
 
   /// @dev Allows the contract owner to set a new API Base URL.
-  /// @param _apiBaseUrl the new API Base URL
-  function setApiBaseUrl(
-    string _apiBaseUrl
+  /// @param _apiBaseUri the new API Base URL
+  function setApiBaseUri(
+    string _apiBaseUri
   )
   external onlyOwner
   returns (string)
   {
-    apiBaseUrl = _apiBaseUrl;
-    return apiBaseUrl;
+    apiBaseUri = _apiBaseUri;
+    return apiBaseUri;
   }
 
   /// @dev Allows the contract owner to mint a new edition of cards.
@@ -155,9 +157,10 @@ contract Cbbc is MintableERC721Token, Pausable {
   internal
   returns (uint256[5])
   {
+    require(_owner != address(this));
     require(checkEditionExists(_editionId));
     Edition memory edition = editions[_editionId];
-    require(edition.numCards >= (mintedCountForEditionId[_editionId] + 5));
+    assert(edition.numCards >= (mintedCountForEditionId[_editionId] + 5));
     mintedCountForEditionId[_editionId] += 5;
     uint256[5] memory cardIds;
     emit FivePackMinted(_editionId, _owner);
@@ -195,11 +198,11 @@ contract Cbbc is MintableERC721Token, Pausable {
   function tokenURI(uint256 _tokenId) public view returns (string) {
     require(checkCardExists(_tokenId));
     string memory _id = uint2str(_tokenId);
-    return strConcat(apiBaseUrl, _id);
+    return strConcat(apiBaseUri, _id);
   }
 
   /// @dev Returns true if the edition with ID _editionId exists.
-  function checkEditionExists(uint16 _editionId) public constant returns(bool){
+  function checkEditionExists(uint16 _editionId) public view returns(bool){
     if((_editionId >= 0) && (_editionId < editions.length)) {
       return true;
     } else {
@@ -216,7 +219,7 @@ contract Cbbc is MintableERC721Token, Pausable {
   }
 
   /// @dev Returns true if the card with ID _cardId exists.
-  function checkCardExists(uint256 _cardId) public constant returns(bool){
+  function checkCardExists(uint256 _cardId) public view returns(bool){
     if((_cardId >= 0) && (_cardId < cards.length)) {
       return true;
     } else {
@@ -230,6 +233,17 @@ contract Cbbc is MintableERC721Token, Pausable {
     require(checkCardExists(_tokenId));
     Card memory card = cards[_tokenId];
     return (card.editionId, mintedCountForEditionId[card.editionId], tokenURI(_tokenId));
+  }
+
+  /// @dev Withdraw remaining contract balance to owner.
+  function withdraw() external onlyOwner {
+    msg.sender.transfer(address(this).balance);
+  }
+
+  /// @dev Fallback function, require no data and just emit a FallBackPaid event.
+  function () public payable {
+    require(msg.data.length == 0);
+    emit FallBackPaid(msg.sender, msg.value);
   }
 
   // String helpers below were taken from Oraclize.
