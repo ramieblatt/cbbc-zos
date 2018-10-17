@@ -10,11 +10,13 @@ contract Cbbc is MintableERC721Token, Pausable {
   /// @dev Emit this event whenever we set a new API Base URL (see setApiBaseUri below)
   event ApiBaseUriSet(string _api_base_url);
   /// @dev Emit this event whenever we mint a new edition (see mintEdition below)
-  event EditionMinted(uint16 _newEditionId, string _name, uint16 _numCards);
+  event EditionMinted(uint16 _newEditionId, string _name, uint32 _numCards, uint256 _packPrice);
+  /// @dev Emit this event whenever someone buys  a new 5 pack of cards (see buyFivePack below)
+  event FivePackBought(uint16 _editionId, address indexed _owner);
   /// @dev Emit this event whenever we mint a new 5 pack of cards (see mintFivePack below)
   event FivePackMinted(uint16 _editionId, address indexed _owner);
   /// @dev Emit this event whenever we mint a new card (see _mintCard below)
-  event CardMinted(bytes32 _playerBbrefId, bytes32 _cardType, uint16 _editionId, uint16 _seriesNumber, uint256 _cardId, address indexed _owner);
+  event CardMinted(uint16 _editionId, uint256 _cardId, address indexed _owner);
   /// @dev Emit this event whenever the contract fallback function is called
   event FallBackPaid(address indexed _sender, uint256 _value);
 
@@ -25,23 +27,19 @@ contract Cbbc is MintableERC721Token, Pausable {
     // The name of the Edition
     string name;
     // The number of cards in the Edition
-    uint16 numCards;
+    uint32 numCards;
+    // The price for a pack of cards in the Edition
+    uint256 packPrice;
   }
 
   /// @dev The struct representing the Crypto Baseball card.
   struct Card {
     // The timestamp at which this card was minted.
     uint64 mintTime;
-    // The BBREF ID of the player represented by the card
-    bytes32 playerBbrefId;
-    // The type of card, ie "player", "pitcher", "manager"
-    bytes32 cardType;
     // The CBBC Edition ID that the card belongs to
     uint16 editionId;
-    // Cards for a given player and edition have a series number, which gets
-    // incremented in sequence. If we mint 100 cards of a given player in an edition,
-    // the 21st one to be minted has serialNumber = 21 of 100.
-    uint16 seriesNumber;
+    // The type of card, ie "player", "pitcher", "manager"
+    string cardType;
   }
 
   /*** STORAGE ***/
@@ -59,10 +57,7 @@ contract Cbbc is MintableERC721Token, Pausable {
   Card[] public cards;
 
   /// @dev Keeps track of how many cards we have minted for a given edition
-  mapping (uint16 => uint16) internal mintedCountForEditionId;
-
-  /// @dev Keeps track of how many cards we have minted for a given player, card type and edition
-  mapping (bytes32 => mapping (bytes32 => mapping (uint16 => uint16))) internal mintedCountForPlayerBbrefIdCardTypeAndEditionId;
+  mapping (uint16 => uint32) internal mintedCountForEditionId;
 
   /// @dev We initialize with the standard params.
   /// @param _sender is the Contract owner.
@@ -91,12 +86,13 @@ contract Cbbc is MintableERC721Token, Pausable {
   /// @param _numCards the total number of cards in the edition
   function mintEdition(
     string _name,
-    uint16 _numCards
+    uint32 _numCards,
+    uint256 _packPrice
   )
   external onlyOwner
   returns (uint16)
   {
-    return _mintEdition(_name, _numCards);
+    return _mintEdition(_name, _numCards, _packPrice);
   }
 
   /// @dev An internal method that creates a new card and stores it.
@@ -105,7 +101,8 @@ contract Cbbc is MintableERC721Token, Pausable {
   /// @param _numCards the total number of cards in the edition
   function _mintEdition(
     string _name,
-    uint16 _numCards
+    uint32 _numCards,
+    uint256 _packPrice
   )
   internal
   returns (uint16)
@@ -113,26 +110,53 @@ contract Cbbc is MintableERC721Token, Pausable {
     Edition memory newEdition = Edition({
       mintTime: uint64(now),
       name: _name,
-      numCards: _numCards
+      numCards: _numCards,
+      packPrice: _packPrice
     });
     uint16 newEditionId = uint16(editions.push(newEdition) - 1);
-    emit EditionMinted(newEditionId, _name, _numCards);
+    emit EditionMinted(newEditionId, _name, _numCards, _packPrice);
     return newEditionId;
   }
 
+  /// @dev Allows the public to buy and mint a pack of 5 cards.
+  /// @param _editionId is the CBBC edition ID for the 5 new cards.
+  /// @return The 5 new card IDs.
+  function buyFivePack(
+    uint16 _editionId
+  )
+  public payable
+  returns (uint256[5])
+  {
+    require(checkEditionExists(_editionId));
+    Edition memory edition = editions[_editionId];
+    require(msg.value >= edition.packPrice);
+    emit FivePackBought(_editionId, msg.sender);
+    return _mintFivePack(_editionId, msg.sender);
+  }
+
   /// @dev Allows the contract owner to mint a pack of 5 cards.
-  /// @param _playerBbrefIds are the player BBREF IDs for the 5 new card.
-  /// @param _cardTypes are the card types ("player", "pitcher", "manager") for the 5 new cards.
   /// @param _editionId is the CBBC edition ID for the 5 new cards.
   /// @param _owner is the pack's owner.
   /// @return The 5 new card IDs.
   function mintFivePack(
-    bytes32[5] _playerBbrefIds,
-    bytes32[5] _cardTypes,
     uint16 _editionId,
     address _owner
   )
   external onlyOwner
+  returns (uint256[5])
+  {
+    return _mintFivePack(_editionId, _owner);
+  }
+
+  /// @dev An internal method that mints a pack of 5 cards.
+  /// @param _editionId is the CBBC edition ID for the 5 new cards.
+  /// @param _owner is the pack's owner.
+  /// @return The 5 new card IDs.
+  function _mintFivePack(
+    uint16 _editionId,
+    address _owner
+  )
+  internal
   returns (uint256[5])
   {
     require(_owner != address(this));
@@ -142,10 +166,11 @@ contract Cbbc is MintableERC721Token, Pausable {
     mintedCountForEditionId[_editionId] += 5;
     uint256[5] memory cardIds;
     emit FivePackMinted(_editionId, _owner);
-    for(uint i = 0; i < 5; ++i)
-    {
-      cardIds[i] = _mintCard(_playerBbrefIds[i], _cardTypes[i], _editionId, _owner);
-    }
+    cardIds[0] = _mintCard(_editionId, _owner);
+    cardIds[1] = _mintCard(_editionId, _owner);
+    cardIds[2] = _mintCard(_editionId, _owner);
+    cardIds[3] = _mintCard(_editionId, _owner);
+    cardIds[4] = _mintCard(_editionId, _owner);
     return cardIds;
   }
 
@@ -154,24 +179,18 @@ contract Cbbc is MintableERC721Token, Pausable {
   /// @param _editionId The CBBC Edition ID that the card belongs to
   /// @param _owner The card owner
   function _mintCard(
-    bytes32 _playerBbrefId,
-    bytes32 _cardType,
     uint16 _editionId,
     address _owner
   )
     internal
     returns (uint256)
   {
-    uint16 seriesNumber = ++mintedCountForPlayerBbrefIdCardTypeAndEditionId[_playerBbrefId][_cardType][_editionId];
     Card memory newCard = Card({
       mintTime: uint64(now),
-      playerBbrefId: _playerBbrefId,
-      cardType: _cardType,
-      editionId: _editionId,
-      seriesNumber: seriesNumber
+      editionId: _editionId
     });
     uint256 newCardId = cards.push(newCard) - 1;
-    emit CardMinted(_playerBbrefId, _cardType, _editionId, seriesNumber, newCardId, _owner);
+    emit CardMinted(_editionId, newCardId, _owner);
     _mint(_owner, newCardId);
     return newCardId;
   }
@@ -195,10 +214,10 @@ contract Cbbc is MintableERC721Token, Pausable {
 
   /// @dev Returns the edition name, number of cards, minted count of cards for the edition, and pack price for a given _editionId.
   /// see: https://docs.opensea.io/docs/2-adding-metadata
-  function editionInfo(uint16 _editionId) public view returns (string, uint16, uint16) {
+  function editionInfo(uint16 _editionId) public view returns (string, uint32, uint32, uint256) {
     require(checkEditionExists(_editionId));
     Edition memory edition = editions[_editionId];
-    return (edition.name, edition.numCards, mintedCountForEditionId[_editionId]);
+    return (edition.name, edition.numCards, mintedCountForEditionId[_editionId], edition.packPrice);
   }
 
   /// @dev Returns true if the card with ID _cardId exists.
@@ -212,10 +231,10 @@ contract Cbbc is MintableERC721Token, Pausable {
 
   /// @dev Returns the edition id, minted card count for the edition and tokenURI for a given token Id.
   /// see: https://docs.opensea.io/docs/2-adding-metadata
-  function cardInfo(uint256 _tokenId) public view returns (bytes32, bytes32, uint16, uint16, uint16) {
+  function cardInfo(uint256 _tokenId) public view returns (uint16, uint32, string) {
     require(checkCardExists(_tokenId));
     Card memory card = cards[_tokenId];
-    return (card.playerBbrefId, card.cardType, card.editionId, card.seriesNumber, mintedCountForPlayerBbrefIdCardTypeAndEditionId[card.playerBbrefId][card.cardType][card.editionId]);
+    return (card.editionId, mintedCountForEditionId[card.editionId], tokenURI(_tokenId));
   }
 
   /// @dev Withdraw remaining contract balance to owner.
