@@ -47,7 +47,7 @@ contract Cbbc is MintableERC721Token, Pausable {
   /*** STORAGE ***/
 
   // @dev The default API Base URI
-  string public constant API_BASE_URI = "http//www.crypto-baseball-cards.com/cards/";
+  string public constant API_BASE_URI = "http//api.crypto-baseball-cards.com/cards/";
 
   // @dev The API Base URI
   string public apiBaseUri;
@@ -177,7 +177,7 @@ contract Cbbc is MintableERC721Token, Pausable {
   }
 
   /// @dev Returns the API URL for a given token Id.
-  /// see: https://docs.opensea.io/docs/2-adding-metadata
+  /// @param _tokenId The Token ID
   function tokenURI(uint256 _tokenId) public view returns (string) {
     require(checkCardExists(_tokenId));
     string memory _id = uint2str(_tokenId);
@@ -185,6 +185,7 @@ contract Cbbc is MintableERC721Token, Pausable {
   }
 
   /// @dev Returns true if the edition with ID _editionId exists.
+  /// @param _editionId The CBBC Edition ID to check
   function checkEditionExists(uint16 _editionId) public view returns(bool){
     if((_editionId >= 0) && (_editionId < editions.length)) {
       return true;
@@ -193,8 +194,13 @@ contract Cbbc is MintableERC721Token, Pausable {
     }
   }
 
+  /// @dev Returns the number of editions.
+  function numberOfEditions() public view returns(uint256){
+    return editions.length;
+  }
+
   /// @dev Returns the edition name, number of cards, minted count of cards for the edition, and pack price for a given _editionId.
-  /// see: https://docs.opensea.io/docs/2-adding-metadata
+  /// @param _editionId The CBBC Edition ID to check
   function editionInfo(uint16 _editionId) public view returns (string, uint16, uint16) {
     require(checkEditionExists(_editionId));
     Edition memory edition = editions[_editionId];
@@ -202,6 +208,7 @@ contract Cbbc is MintableERC721Token, Pausable {
   }
 
   /// @dev Returns true if the card with ID _cardId exists.
+  /// @param _cardId The Card ID
   function checkCardExists(uint256 _cardId) public view returns(bool){
     if((_cardId >= 0) && (_cardId < cards.length)) {
       return true;
@@ -210,11 +217,16 @@ contract Cbbc is MintableERC721Token, Pausable {
     }
   }
 
-  /// @dev Returns the edition id, minted card count for the edition and tokenURI for a given token Id.
-  /// see: https://docs.opensea.io/docs/2-adding-metadata
-  function cardInfo(uint256 _tokenId) public view returns (bytes32, bytes32, uint16, uint16, uint16) {
-    require(checkCardExists(_tokenId));
-    Card memory card = cards[_tokenId];
+  /// @dev Returns the number of minted cards.
+  function numberOfCards() public view returns (uint256){
+    return cards.length;
+  }
+
+  /// @dev Returns the edition id, minted card count for the edition and tokenURI for a given card/token Id.
+  /// @param _cardId The Card ID
+  function cardInfo(uint256 _cardId) public view returns (bytes32, bytes32, uint16, uint16, uint16) {
+    require(checkCardExists(_cardId));
+    Card memory card = cards[_cardId];
     return (card.playerBbrefId, card.cardType, card.editionId, card.seriesNumber, mintedCountForPlayerBbrefIdCardTypeAndEditionId[card.playerBbrefId][card.cardType][card.editionId]);
   }
 
@@ -231,7 +243,6 @@ contract Cbbc is MintableERC721Token, Pausable {
 
   // String helpers below were taken from Oraclize.
   // https://github.com/oraclize/ethereum-api/blob/master/oraclizeAPI_0.4.sol
-
   function strConcat(string _a, string _b) internal pure returns (string) {
     bytes memory _ba = bytes(_a);
     bytes memory _bb = bytes(_b);
