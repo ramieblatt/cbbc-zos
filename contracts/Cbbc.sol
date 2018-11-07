@@ -11,6 +11,12 @@ contract Cbbc is MintableERC721Token, Pausable {
   event ApiBaseUriSet(string _api_base_url);
   /// @dev Emit this event whenever we mint a new edition (see mintEdition below)
   event EditionMinted(uint16 _newEditionId, string _name, uint16 _numCards);
+  /// @dev Emit this event whenever we sell a new 5 pack of cards via ETH (see buyFivePackUsingEth below)
+  event FivePackBoughtUsingEth(uint16 _editionId, address indexed _owner, uint256 _packPricePaid);
+  /// @dev Emit this event whenever we sell a new 5 pack of cards via Fiat/Credit Card etc (see buyFivePackUsingFiatFor below)
+  event FivePackBoughtUsingFiatFor(uint16 _editionId, address indexed _owner);
+  /// @dev Emit this event whenever we sell a new 5 pack of cards (see buyFivePackFor below)
+  event FivePackBoughtFor(uint16 _editionId, address indexed _owner);
   /// @dev Emit this event whenever we mint a new 5 pack of cards (see mintFivePack below)
   event FivePackMinted(uint16 _editionId, address indexed _owner);
   /// @dev Emit this event whenever we mint a new card (see _mintCard below)
@@ -52,6 +58,12 @@ contract Cbbc is MintableERC721Token, Pausable {
   // @dev The API Base URI
   string public apiBaseUri;
 
+  // @dev The default Pack Price in Wei, we start with ~0.05ETH
+  uint256 public constant DEFAULT_PACK_PRICE = 50000000000000000;
+
+  // @dev The Pack Price in Wei
+  uint256 public packPrice;
+
   /// @dev All the editions that have been minted, indexed by editionId.
   Edition[] public editions;
 
@@ -64,12 +76,19 @@ contract Cbbc is MintableERC721Token, Pausable {
   /// @dev Keeps track of how many cards we have minted for a given player, card type and edition
   mapping (bytes32 => mapping (bytes32 => mapping (uint16 => uint16))) internal mintedCountForPlayerBbrefIdCardTypeAndEditionId;
 
+  /// @dev Keeps track of how many card five packs we have sold for a given edition that are yet to be minted
+  mapping (uint16 => uint16) internal soldUnmintedFivePackCountForEditionId;
+
+  // @dev Mapping from owner to number of card five packs sold, to be minted
+  mapping (address => mapping (uint16 => uint16)) internal soldUnmintedFivePackCountForOwnerAndEditionId;
+
   /// @dev We initialize with the standard params.
   /// @param _sender is the Contract owner.
   /// @param _name is the CBBC ERC721 token name.
   /// @param _symbol is the CBBC ERC721 token symbol.
   function initialize(address _sender, string _name, string _symbol) isInitializer("Cbbc", "0.1.0")  public {
     apiBaseUri = API_BASE_URI;
+    packPrice = DEFAULT_PACK_PRICE;
     Ownable.initialize(_sender);
     ERC721Token.initialize(_name, _symbol);
   }
@@ -86,26 +105,38 @@ contract Cbbc is MintableERC721Token, Pausable {
     return apiBaseUri;
   }
 
+  /// @dev Allows the contract owner to set a new pack price in wei.
+  /// @param _packPrice the new pack price
+  function setPackPrice(
+    uint256 _packPrice
+  )
+  external onlyOwner
+  returns (uint256)
+  {
+    packPrice = _packPrice;
+    return packPrice;
+  }
+
   /// @dev Allows the contract owner to mint a new edition of cards.
   /// @param _name the name of the edition
-  /// @param _numCards the total number of cards in the edition
+  /// @param _numFivePacks the total number of card five packs in the edition
   function mintEdition(
     string _name,
-    uint16 _numCards
+    uint16 _numFivePacks
   )
   external onlyOwner
   returns (uint16)
   {
-    return _mintEdition(_name, _numCards);
+    return _mintEdition(_name, _numFivePacks);
   }
 
   /// @dev An internal method that creates a new card and stores it.
   /// Emits an EditionMinted event.
   /// @param _name the name of the edition
-  /// @param _numCards the total number of cards in the edition
+  /// @param _numFivePacks the total number of card five packs in the edition
   function _mintEdition(
     string _name,
-    uint16 _numCards
+    uint16 _numFivePacks
   )
   internal
   returns (uint16)
@@ -113,11 +144,59 @@ contract Cbbc is MintableERC721Token, Pausable {
     Edition memory newEdition = Edition({
       mintTime: uint64(now),
       name: _name,
-      numCards: _numCards
+      numCards: _numFivePacks*5
     });
     uint16 newEditionId = uint16(editions.push(newEdition) - 1);
-    emit EditionMinted(newEditionId, _name, _numCards);
+    emit EditionMinted(newEditionId, _name, _numFivePacks*5);
     return newEditionId;
+  }
+
+  /// @dev Allows the contract owner to buy a five pack of cards on behalf of someone (for packs purchased not via ETH but using fiat, credit cards, etc).
+  /// @param _editionId is the CBBC edition ID for the 5 new cards.
+  /// @param _owner will be the pack's owner.
+  function buyFivePackUsingFiatFor(
+    uint16 _editionId,
+    address _owner
+  )
+  external onlyOwner
+  returns (uint16)
+  {
+    uint16 numFivePacksOwed = _buyFivePackFor(_editionId, _owner);
+    emit FivePackBoughtUsingFiatFor(_editionId, _owner);
+    return numFivePacksOwed;
+  }
+
+  /// @dev buyFivePack function, payable, requires amount paid to be more than packPrice.
+  /// @param _editionId is the CBBC edition ID for the 5 new cards.
+  function buyFivePackUsingEth(
+    uint16 _editionId
+  )
+  public payable
+  returns (uint16)
+  {
+    require(msg.value > packPrice);
+    uint16 numFivePacksOwed = _buyFivePackFor(_editionId, msg.sender);
+    emit FivePackBoughtUsingEth(_editionId, msg.sender, msg.value);
+    return numFivePacksOwed;
+  }
+
+  /// @dev Allows the contract owner to buy a five pack of cards on behalf of someone (for packs purchased not via ETH but using fiat, credit cards, etc).
+  /// @param _editionId is the CBBC edition ID for the 5 new cards.
+  /// @param _owner will be the pack's owner.
+  function _buyFivePackFor(
+    uint16 _editionId,
+    address _owner
+  )
+  internal
+  returns (uint16)
+  {
+    require(_owner != address(this));
+    require(checkEditionExists(_editionId));
+    require(enoughUnmintedCardsToSellFivePack(_editionId));
+    soldUnmintedFivePackCountForEditionId[_editionId] += 1;
+    soldUnmintedFivePackCountForOwnerAndEditionId[_owner][_editionId] += 1;
+    emit FivePackBoughtFor(_editionId, _owner);
+    return soldUnmintedFivePackCountForOwnerAndEditionId[_owner][_editionId];
   }
 
   /// @dev Allows the contract owner to mint a pack of 5 cards.
@@ -135,17 +214,20 @@ contract Cbbc is MintableERC721Token, Pausable {
   external onlyOwner
   returns (uint256[5])
   {
-    require(_owner != address(this));
     require(checkEditionExists(_editionId));
     Edition memory edition = editions[_editionId];
     assert(edition.numCards >= (mintedCountForEditionId[_editionId] + 5));
+    assert(soldUnmintedFivePackCountForEditionId[_editionId] >= 1);
+    assert(soldUnmintedFivePackCountForOwnerAndEditionId[_owner][_editionId] >= 1);
     mintedCountForEditionId[_editionId] += 5;
+    soldUnmintedFivePackCountForEditionId[_editionId] -= 1;
+    soldUnmintedFivePackCountForOwnerAndEditionId[_owner][_editionId] -= 1;
     uint256[5] memory cardIds;
-    emit FivePackMinted(_editionId, _owner);
     for(uint i = 0; i < 5; ++i)
     {
       cardIds[i] = _mintCard(_playerBbrefIds[i], _cardTypes[i], _editionId, _owner);
     }
+    emit FivePackMinted(_editionId, _owner);
     return cardIds;
   }
 
@@ -201,10 +283,10 @@ contract Cbbc is MintableERC721Token, Pausable {
 
   /// @dev Returns the edition name, number of cards, minted count of cards for the edition, and pack price for a given _editionId.
   /// @param _editionId The CBBC Edition ID to check
-  function editionInfo(uint16 _editionId) public view returns (string, uint16, uint16) {
+  function editionInfo(uint16 _editionId) public view returns (string, uint16, uint16, bool, uint16) {
     require(checkEditionExists(_editionId));
     Edition memory edition = editions[_editionId];
-    return (edition.name, edition.numCards, mintedCountForEditionId[_editionId]);
+    return (edition.name, edition.numCards, mintedCountForEditionId[_editionId], enoughUnmintedCardsToSellFivePack(_editionId), soldUnmintedFivePackCountForEditionId[_editionId]);
   }
 
   /// @dev Returns true if the card with ID _cardId exists.
@@ -233,6 +315,19 @@ contract Cbbc is MintableERC721Token, Pausable {
   /// @dev Withdraw remaining contract balance to owner.
   function withdraw() external onlyOwner {
     msg.sender.transfer(address(this).balance);
+  }
+
+  /// @dev Returns true if the edition with ID _editionId exists.
+  /// @param _editionId The CBBC Edition ID to check
+  function enoughUnmintedCardsToSellFivePack(uint16 _editionId) public view returns(bool){
+    require(checkEditionExists(_editionId));
+    Edition memory edition = editions[_editionId];
+    uint16 _numUnmintedCardsInEdition = (edition.numCards - mintedCountForEditionId[_editionId]);
+    if (_numUnmintedCardsInEdition >= (soldUnmintedFivePackCountForEditionId[_editionId] + 1)*5 ) {
+      return true;
+    } else {
+      return false;
+    }
   }
 
   /// @dev Fallback function, require no data and just emit a FallBackPaid event.
